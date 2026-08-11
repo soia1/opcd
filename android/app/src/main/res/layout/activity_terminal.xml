@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/terminalRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000"
+    android:orientation="vertical">
+
+    <!-- Output area -->
+    <ScrollView
+        android:id="@+id/terminalScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <TextView
+            android:id="@+id/terminalOutput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:padding="8dp"
+            android:textColor="#FF66FF66"
+            android:textSize="13sp"
+            android:typeface="monospace" />
+    </ScrollView>
+
+    <!-- Special-key row -->
+    <LinearLayout
+        android:id="@+id/specialKeysRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FF111111"
+        android:orientation="horizontal"
+        android:padding="2dp">
+
+        <Button
+            android:id="@+id/keyTab"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="40dp"
+            android:text="Tab"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/keyEsc"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="40dp"
+            android:text="Esc"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/keyCtrl"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="40dp"
+            android:text="Ctrl"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/keyUp"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="40dp"
+            android:text="↑"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/keyDown"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="40dp"
+            android:text="↓"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/keyCtrlC"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="40dp"
+            android:text="Ctrl+C"
+            android:textColor="#FFFFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Input row -->
+    <LinearLayout
+        android:id="@+id/inputRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FF111111"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="4dp">
+
+        <TextView
+            android:id="@+id/promptView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:paddingStart="4dp"
+            android:paddingEnd="6dp"
+            android:text="$"
+            android:textColor="#FF66FF66"
+            android:textSize="14sp"
+            android:typeface="monospace" />
+
+        <EditText
+            android:id="@+id/terminalInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:hint="@string/terminal_input_hint"
+            android:imeOptions="actionDone"
+            android:importantForAutofill="no"
+            android:inputType="textVisiblePassword|textNoSuggestions"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:textColor="#FFFFFFFF"
+            android:textColorHint="#FF808080"
+            android:textSize="14sp"
+            android:typeface="monospace" />
+
+        <Button
+            android:id="@+id/sendButton"
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/terminal_send" />
+    </LinearLayout>
+
+</LinearLayout>

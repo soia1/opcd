@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="OpenCode Server">
+
+        <EditTextPreference
+            android:defaultValue="4096"
+            android:key="server_port"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="Server Port"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:defaultValue="127.0.0.1"
+            android:key="server_host"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="Server Host"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Runtime">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="auto_start_server"
+            android:title="Auto-start server on launch" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="keep_alive"
+            android:title="Keep server alive in background" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="About">
+
+        <Preference
+            android:enabled="false"
+            android:key="version"
+            android:title="Version"
+            android:summary="0.1.0" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

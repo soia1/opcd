@@ -17,6 +17,7 @@ android/.idea/
 *.dex
 *.class
 *.jar
+!android/gradle/wrapper/gradle-wrapper.jar
 
 # IDE
 .idea/

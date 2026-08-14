@@ -32,7 +32,10 @@ OPCD Android is an independent Android application that runs OpenCode as a self-
 ### Linux Runtime
 
 - Use **PRoot** as the user-space chroot engine (no root required).
-- PRoot + helper libs ship **inside the APK** as `jniLibs/arm64-v8a/*.so` (fetched by `scripts/fetch-runtime.sh` in CI): Termux's `proot 5.1.107.90` (dynamic), `libproot-loader.so`, `libtalloc.so`, `libandroid-shmem.so`. `libopcd-exec.so` is our own ~40-line MIT `LD_PRELOAD` shim (`android/app/src/main/cpp/opcd_exec_shim.c`, NDK/CMake build) that rewrites `execve()` of app-data paths to `/system/bin/linker64`. Do NOT use Termux's `libtermux-exec.so` — its hardcoded Termux path-mangling breaks PRoot's loader and has no off switch.
+- PRoot + helper libs ship **inside the APK** as `jniLibs/arm64-v8a/*.so` (fetched by `scripts/fetch-runtime.sh` in CI): Termux's `proot 5.1.107.90` (dynamic), `libproot-loader.so`, `libtalloc.so`, `libandroid-shmem.so`.
+- `libopcd-exec.so` is our own ~40-line MIT `LD_PRELOAD` shim (`android/app/src/main/cpp/opcd_exec_shim.c`, NDK/CMake build) that rewrites `execve()` of app-data paths to `/system/bin/linker64`. It is **not loaded at runtime** while `targetSdk` remains 28 — the legacy SELinux domain makes the rewrite unnecessary and preloading any library into PRoot caused instant SIGSEGV on some devices. It is kept as defensive/future-proof code only.
+- Do NOT use Termux's `libtermux-exec.so` — its hardcoded Termux path-mangling breaks PRoot's loader and has no off switch.
+- Set `PROOT_NO_SECCOMP=1` at runtime. PRoot's seccomp accelerator crashes on several kernel 6.x devices (common on Android 14/15), producing exit 139 with no output; pure ptrace mode is slower but stable.
 - Use **Alpine Linux** rootfs as the base distribution because:
   - Small size (good for mobile).
   - Uses musl libc, which matches the OpenCode `musl` ARM64 binary.

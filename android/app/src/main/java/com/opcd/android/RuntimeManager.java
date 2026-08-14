@@ -1,7 +1,7 @@
 package com.opcd.android;
 
 import android.content.Context;
-import android.os.Build;
+import android.content.pm.ApplicationInfo;
 import android.util.Log;
 import java.io.BufferedReader;
 import java.io.File;
@@ -126,21 +126,19 @@ public class RuntimeManager {
         pb.environment().put("PROOT_TMP_DIR", tmp.getAbsolutePath());
         pb.environment().put("PROOT_TMPDIR", tmp.getAbsolutePath());
 
-String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
-        // libopcd-exec.so is a tiny MIT-licensed LD_PRELOAD shim built from
-        // android/app/src/main/cpp/opcd_exec_shim.c. When preloaded into every
-        // process proot spawns, it intercepts execve() of any path under our
-        // app's data directory and rewrites it as
-        // execve("/system/bin/linker64", ...). The kernel then only ever sees
-        // the system linker, which is allowed; linker64 mmaps the actual guest
-        // ELF. This is the same technique Termux's termux-exec uses, but
-        // stripped of all the Termux-specific behavior (path prefixing, env
-        // stripping) that conflicted with PRoot's loader.
-        pb.environment().put("LD_PRELOAD", nativeLibDir + "/libopcd-exec.so");
-        // Tell proot to use the loader ELF we ship inside nativeLibraryDir
-        // (apk_data_file) instead of writing one to PROOT_TMP_DIR and trying
-        // to exec it from app_data_file -- which the kernel denies.
-        pb.environment().put("PROOT_LOADER", nativeLibDir + "/libproot-loader.so");
+        // With targetSdk 28, app-private files are in the legacy SELinux
+        // domain where execve() and mmap(PROT_EXEC) are still allowed, so the
+        // LD_PRELOAD linker64-rewrite shim is not needed at runtime. Keep the
+        // shim source as defensive/future-proof code but do not load it here:
+        // on some devices preloading any library into proot causes an instant
+        // SIGSEGV during early startup. (Termux needs LD_PRELOAD because it
+        // runs on devices/ROMs where the policy is stricter; our targetSdk 28
+        // sideload avoids that.)
+        //
+        // PROOT_NO_SECCOMP disables proot's seccomp accelerator and falls back
+        // to pure ptrace. The seccomp filter crashes on several kernel 6.x
+        // devices (common on Android 14/15), producing exit 139 with no output.
+        pb.environment().put("PROOT_NO_SECCOMP", "1");
     }
 
     /**
@@ -210,6 +208,7 @@ String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
                 }
 
                 emitProgress(listener, "Verifying PRoot...");
+                logRuntimeDiagnostics();
                 smokeTestProot();
 
                 if (!areBaseToolsInstalled()) {
@@ -597,7 +596,36 @@ String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
         }
     }
 
-    /** Logs PRoot path + SELinux context to logcat to aid debugging exec failures. */
+    /** Logs runtime diagnostics (targetSdk, SELinux context, page size, proot). */
+    private void logRuntimeDiagnostics() {
+        try {
+            ApplicationInfo ai = context.getApplicationInfo();
+            Log.i(TAG, "diag: targetSdkVersion=" + ai.targetSdkVersion);
+            Log.i(TAG, "diag: nativeLibraryDir=" + ai.nativeLibraryDir);
+            Log.i(TAG, "diag: prootBin=" + prootBin.getAbsolutePath()
+                    + " exists=" + prootBin.exists() + " canExec=" + prootBin.canExecute());
+            Log.i(TAG, "diag: secontext=" + readOneLine(new File("/proc/self/attr/current")));
+            try {
+                long pageSize = android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE);
+                Log.i(TAG, "diag: pageSize=" + pageSize);
+            } catch (Exception e) {
+                Log.i(TAG, "diag: pageSize unknown: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "diag failed: " + e.getMessage());
+        }
+    }
+
+    private String readOneLine(File file) {
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(file)))) {
+            String line = r.readLine();
+            return line != null ? line : "";
+        } catch (Exception e) {
+            return "(" + e.getMessage() + ")";
+        }
+    }
+
+    /** Logs PRoot path + SELinux file contexts via ls -ldZ to aid debugging exec failures. */
     private void logDiagnostics() {
         try {
             Log.e(TAG, "diag: nativeLibraryDir=" + context.getApplicationInfo().nativeLibraryDir);

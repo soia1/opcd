@@ -30,8 +30,9 @@ public class RuntimeManager {
 
     private static final String TAG = "RuntimeManager";
 
-    // PRoot ships inside the APK as a native library (see scripts/fetch-proot.sh
-    // and the jniLibs/arm64-v8a/libproot.so fetched in CI). Android extracts it
+    // PRoot ships inside the APK as a native library (see scripts/fetch-runtime.sh
+    // for the downloaded files and app/src/main/cpp/opcd_exec_shim.c for the
+    // built-in LD_PRELOAD shim). Android extracts jniLibs/arm64-v8a/libproot.so
     // to nativeLibraryDir, the only app-owned storage SELinux allows execve()
     // from on Android 10+ (app_data_file neverallow on execute_no_trans).
 
@@ -123,15 +124,17 @@ public class RuntimeManager {
         pb.environment().put("PROOT_TMP_DIR", tmp.getAbsolutePath());
         pb.environment().put("PROOT_TMPDIR", tmp.getAbsolutePath());
 
-        String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
-        // libtermux-exec.so is preloaded into every process proot spawns and
-        // intercepts execve() of any path under our app's data directory,
-        // rewriting it as execve("/system/bin/linker64", ...). The kernel then
-        // only ever sees the system linker execute, which is allowed; linker64
-        // mmaps the actual guest ELF. This is the same technique Termux uses
-        // to run its proot-distro on Android 10+, and it is the only way to
-        // execute guest binaries that live in app_data_file (the rootfs).
-        pb.environment().put("LD_PRELOAD", nativeLibDir + "/libtermux-exec.so");
+String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+        // libopcd-exec.so is a tiny MIT-licensed LD_PRELOAD shim built from
+        // android/app/src/main/cpp/opcd_exec_shim.c. When preloaded into every
+        // process proot spawns, it intercepts execve() of any path under our
+        // app's data directory and rewrites it as
+        // execve("/system/bin/linker64", ...). The kernel then only ever sees
+        // the system linker, which is allowed; linker64 mmaps the actual guest
+        // ELF. This is the same technique Termux's termux-exec uses, but
+        // stripped of all the Termux-specific behavior (path prefixing, env
+        // stripping) that conflicted with PRoot's loader.
+        pb.environment().put("LD_PRELOAD", nativeLibDir + "/libopcd-exec.so");
         // Tell proot to use the loader ELF we ship inside nativeLibraryDir
         // (apk_data_file) instead of writing one to PROOT_TMP_DIR and trying
         // to exec it from app_data_file -- which the kernel denies.

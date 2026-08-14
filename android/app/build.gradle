@@ -5,6 +5,10 @@ plugins {
 android {
     namespace 'com.opcd.android'
     compileSdk 34
+    // Pinned to match the version installed in CI by
+    // .github/workflows/android-build.yml (android-actions/setup-android@v3
+    // with ndk-version: 25.2.9519653).
+    ndkVersion '25.2.9519653'
 
     defaultConfig {
         applicationId "com.opcd.android"
@@ -12,6 +16,22 @@ android {
         targetSdk 34
         versionCode 1
         versionName "0.1.0"
+
+        externalNativeBuild {
+            cmake {
+                abiFilters "arm64-v8a"
+            }
+        }
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
     }
 
     buildTypes {
@@ -28,10 +48,11 @@ android {
 
     packaging {
         jniLibs {
-            // Extract native libraries (libproot.so) to /data/app/<pkg>/lib/<abi>/
-            // as real, executable files. Required so PRoot can be execve()'d from
-            // the native library directory (the only app-owned storage Android 10+
-            // SELinux allows execution from).
+            // Extract native libraries (libproot.so, libopcd-exec.so) to
+            // /data/app/<pkg>/lib/<abi>/ as real, executable files. Required
+            // so PRoot can be execve()'d from the native library directory
+            // (the only app-owned storage Android 10+ SELinux allows
+            // execution from).
             useLegacyPackaging true
         }
     }

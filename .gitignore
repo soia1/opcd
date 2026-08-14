@@ -19,7 +19,7 @@ android/.idea/
 *.jar
 !android/gradle/wrapper/gradle-wrapper.jar
 
-# Fetched native libraries (PRoot is downloaded at build time, see scripts/fetch-proot.sh)
+# Fetched native libraries (PRoot is downloaded at build time, see scripts/fetch-runtime.sh)
 android/app/src/main/jniLibs/
 
 # IDE

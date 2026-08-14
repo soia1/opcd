@@ -10,13 +10,15 @@
 #   libproot-loader.so    GPL-2.0   static proot loader (pre-staged, avoids
 #                                   the kernel rejecting a freshly-written
 #                                   loader file in app_data_file)
-#   libtermux-exec.so     Apache-2.0 LD_PRELOAD shim that rewrites every
-#                                    guest execve() through /system/bin/linker64
-#   libtalloc.so.2        LGPL-2.1  runtime dep of proot
+#   libtalloc.so          LGPL-2.1  runtime dep of proot (renamed+SONAME-rewritten
+#                                   from libtalloc.so.2 so AGP packages it)
 #   libandroid-shmem.so   Apache-2.0 runtime dep of proot
 #
 # After fetching, libproot.so's RUNPATH is rewritten from the Termux default
 # to $ORIGIN so its two deps resolve from the same directory.
+#
+# Note: libopcd-exec.so is NOT fetched here. It is built from C source at
+# build time via gradle's externalNativeBuild (see app/src/main/cpp/).
 #
 # Usage:
 #   ./scripts/fetch-runtime.sh
@@ -25,7 +27,6 @@ set -e
 MIRROR="https://packages.termux.dev/apt/termux-main/pool/main"
 
 PROOT_DEB="$MIRROR/p/proot/proot_5.1.107.90_aarch64.deb"
-EXEC_DEB="$MIRROR/t/termux-exec/termux-exec_1%3A2.5.0-1_aarch64.deb"
 TALLOC_DEB="$MIRROR/libt/libtalloc/libtalloc_2.4.3_aarch64.deb"
 SHMEM_DEB="$MIRROR/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb"
 
@@ -68,9 +69,6 @@ fetch() {
 # proot (provides both the main binary and the loader)
 fetch "$PROOT_DEB" "data/data/com.termux/files/usr/bin/proot"          "$DEST_DIR/libproot.so"
 fetch "$PROOT_DEB" "data/data/com.termux/files/usr/libexec/proot/loader" "$DEST_DIR/libproot-loader.so"
-
-# termux-exec LD_PRELOAD shim
-fetch "$EXEC_DEB" "data/data/com.termux/files/usr/lib/libtermux-exec-ld-preload.so" "$DEST_DIR/libtermux-exec.so"
 
 # proot runtime deps
 # NOTE: libtalloc is fetched as libtalloc.so.2.4.3 but renamed to libtalloc.so

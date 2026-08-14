@@ -26,6 +26,8 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          ndk-version: 25.2.9519653
 
       - name: Install patchelf (needed to rewrite proot's library search path)
         run: sudo apt-get install -y patchelf

@@ -151,7 +151,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onError(String error) {
+    public void onSetupError(String error) {
         setupInProgress = false;
         runOnUiThread(() -> {
             setupButton.setEnabled(true);

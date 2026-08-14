@@ -53,12 +53,6 @@ public class OpenCodeService extends Service {
     }
 
     @Override
-    public void onCreate() {
-        super.onCreate();
-        Log.i(TAG, "Service created");
-    }
-
-    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopServer();

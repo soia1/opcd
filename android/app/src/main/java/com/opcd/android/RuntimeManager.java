@@ -55,7 +55,7 @@ public class RuntimeManager {
 
     public interface SetupListener {
         void onProgress(String message);
-        void onError(String error);
+        void onSetupError(String error);
         void onComplete();
     }
 
@@ -416,7 +416,7 @@ public class RuntimeManager {
     private void emitError(SetupListener listener, String error) {
         Log.e(TAG, error);
         if (listener != null) {
-            context.getMainExecutor().execute(() -> listener.onError(error));
+            context.getMainExecutor().execute(() -> listener.onSetupError(error));
         }
     }
 

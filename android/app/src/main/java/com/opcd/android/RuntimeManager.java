@@ -29,14 +29,15 @@ public class RuntimeManager {
     private static final String PROOT_VERSION = "5.3.0";
     private static final String PROOT_URL =
             "https://github.com/proot-me/proot/releases/download/v" + PROOT_VERSION +
-                    "/proot-" + PROOT_VERSION + "-aarch64-static";
+                    "/proot-v" + PROOT_VERSION + "-aarch64-static";
 
-    private static final String ALPINE_VERSION = "v3.19";
+    private static final String ALPINE_BRANCH = "v3.19";
+    private static final String ALPINE_VERSION = "3.19.9";
     private static final String ALPINE_ARCH = "aarch64";
     private static final String ALPINE_TARBALL =
-            "alpine-minirootfs-" + ALPINE_VERSION.substring(1) + "-" + ALPINE_ARCH + ".tar.gz";
+            "alpine-minirootfs-" + ALPINE_VERSION + "-" + ALPINE_ARCH + ".tar.gz";
     private static final String ALPINE_URL =
-            "https://dl-cdn.alpinelinux.org/alpine/" + ALPINE_VERSION +
+            "https://dl-cdn.alpinelinux.org/alpine/" + ALPINE_BRANCH +
                     "/releases/" + ALPINE_ARCH + "/" + ALPINE_TARBALL;
 
     private static final String OPENCODE_VERSION = "1.18.16";
@@ -218,8 +219,8 @@ public class RuntimeManager {
         // APK repositories
         File repos = new File(rootfsDir, "etc/apk/repositories");
         writeText(repos,
-                "https://dl-cdn.alpinelinux.org/alpine/" + ALPINE_VERSION + "/main\n" +
-                        "https://dl-cdn.alpinelinux.org/alpine/" + ALPINE_VERSION + "/community\n");
+                "https://dl-cdn.alpinelinux.org/alpine/" + ALPINE_BRANCH + "/main\n" +
+                        "https://dl-cdn.alpinelinux.org/alpine/" + ALPINE_BRANCH + "/community\n");
     }
 
     private boolean areBaseToolsInstalled() {

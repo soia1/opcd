@@ -114,16 +114,28 @@ public class RuntimeManager {
         pb.redirectErrorStream(true);
         pb.environment().put("HOME", "/root");
         pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:/sbin");
-        // PRoot 5.3.0 reads PROOT_TMP_DIR (the name it prints in its error
+        // PRoot 5.x reads PROOT_TMP_DIR (the name it prints in its error
         // message). Older builds recognize PROOT_TMPDIR. Set both so the
         // writable app-private temp dir is used; otherwise proot falls back to
-        // host /tmp, which apps cannot write to -> "can't create temporary
-        // directory: Permission denied" -> the whole glue-rootfs path lookup
-        // collapses ("/bin/sh: No such file or directory").
+        // host /tmp, which apps cannot write to.
         File tmp = getProotTmpDir();
         if (!tmp.isDirectory()) tmp.mkdirs();
         pb.environment().put("PROOT_TMP_DIR", tmp.getAbsolutePath());
         pb.environment().put("PROOT_TMPDIR", tmp.getAbsolutePath());
+
+        String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+        // libtermux-exec.so is preloaded into every process proot spawns and
+        // intercepts execve() of any path under our app's data directory,
+        // rewriting it as execve("/system/bin/linker64", ...). The kernel then
+        // only ever sees the system linker execute, which is allowed; linker64
+        // mmaps the actual guest ELF. This is the same technique Termux uses
+        // to run its proot-distro on Android 10+, and it is the only way to
+        // execute guest binaries that live in app_data_file (the rootfs).
+        pb.environment().put("LD_PRELOAD", nativeLibDir + "/libtermux-exec.so");
+        // Tell proot to use the loader ELF we ship inside nativeLibraryDir
+        // (apk_data_file) instead of writing one to PROOT_TMP_DIR and trying
+        // to exec it from app_data_file -- which the kernel denies.
+        pb.environment().put("PROOT_LOADER", nativeLibDir + "/libproot-loader.so");
     }
 
     /**

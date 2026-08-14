@@ -33,8 +33,10 @@ public class RuntimeManager {
     // PRoot ships inside the APK as a native library (see scripts/fetch-runtime.sh
     // for the downloaded files and app/src/main/cpp/opcd_exec_shim.c for the
     // built-in LD_PRELOAD shim). Android extracts jniLibs/arm64-v8a/libproot.so
-    // to nativeLibraryDir, the only app-owned storage SELinux allows execve()
-    // from on Android 10+ (app_data_file neverallow on execute_no_trans).
+    // to nativeLibraryDir. NOTE: the app targets SDK 28 on purpose -- apps
+    // targeting 29+ get the untrusted_app SELinux domain where executing (and
+    // mmap(PROT_EXEC)-ing) files from app private storage is neverallowed,
+    // which makes PRoot's loader segfault (exit 139) when mapping guest ELFs.
 
     private static final String ALPINE_BRANCH = "v3.19";
     private static final String ALPINE_VERSION = "3.19.9";
@@ -207,6 +209,9 @@ String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
                     emitProgress(listener, "Alpine Linux ready.");
                 }
 
+                emitProgress(listener, "Verifying PRoot...");
+                smokeTestProot();
+
                 if (!areBaseToolsInstalled()) {
                     emitProgress(listener, "Installing base tools (Node.js, npm, Python, Git)...");
                     runInAlpine("apk update && apk add --no-cache nodejs npm python3 py3-pip git bash curl wget", listener);
@@ -280,6 +285,54 @@ String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
         runtimeDir.mkdirs();
         rootfsDir.mkdirs();
         new File(runtimeDir, "proot-tmp").mkdirs();
+    }
+
+    /**
+     * Runs a trivial guest command to verify the whole chain works
+     * (proot -> loader -> guest ELF mapping -> busybox) before we spend time
+     * on apk. On failure, re-runs with PROOT_VERBOSE=6 and includes the tail
+     * in the exception so the exact breakage point is visible to the user.
+     */
+    private void smokeTestProot() throws IOException, InterruptedException {
+        List<String> cmd = buildProotBaseCommand();
+        cmd.add("/bin/sh");
+        cmd.add("-c");
+        cmd.add("echo OPCD_SMOKE_OK; uname -a; cat /etc/alpine-release 2>/dev/null");
+
+        StringBuilder out = new StringBuilder();
+        int rc = runCapturing(cmd, false, out);
+        Log.i(TAG, "smoke test rc=" + rc + " output: " + out.toString().trim());
+        if (rc == 0 && out.toString().contains("OPCD_SMOKE_OK")) {
+            return;
+        }
+
+        // Failed: collect verbose proot diagnostics.
+        StringBuilder verbose = new StringBuilder();
+        runCapturing(cmd, true, verbose);
+        String tail = verbose.toString().trim();
+        int max = 3000;
+        if (tail.length() > max) tail = "..." + tail.substring(tail.length() - max);
+        throw new IOException("PRoot smoke test failed (exit " + rc + ").\n"
+                + "--- guest output ---\n" + out.toString().trim()
+                + "\n--- proot verbose tail ---\n" + tail);
+    }
+
+    /** Runs a proot command, capturing merged stdout+stderr into out. */
+    private int runCapturing(List<String> cmd, boolean prootVerbose, StringBuilder out)
+            throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        configureProotEnv(pb);
+        if (prootVerbose) {
+            pb.environment().put("PROOT_VERBOSE", "6");
+        }
+        Process p = pb.start();
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                out.append(line).append('\n');
+            }
+        }
+        return p.waitFor();
     }
 
     private void configureAlpine() throws IOException {

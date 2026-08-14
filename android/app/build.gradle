@@ -13,7 +13,16 @@ android {
     defaultConfig {
         applicationId "com.opcd.android"
         minSdk 26
-        targetSdk 34
+        // Load-bearing decision: targetSdk MUST stay <= 28. Apps targeting 29+
+        // run in the untrusted_app SELinux domain where Android 10+ neverallows
+        // { execute, execute_no_trans } on app_data_file. That blocks both
+        // execve() of files in /data/data/<pkg> AND mmap(PROT_EXEC) of them --
+        // the latter is how proot's loader maps guest ELF binaries, so PRoot
+        // segfaults (exit 139) no matter what LD_PRELOAD shim we install.
+        // targetSdk 28 keeps the legacy domain where app-private execution is
+        // still allowed (same reason Termux ships targetSdk 28 on Android 15).
+        // We distribute via GitHub APK, so Play's targetSdk floor does not apply.
+        targetSdk 28
         versionCode 1
         versionName "0.1.0"
 

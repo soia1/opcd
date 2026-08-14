@@ -116,6 +116,9 @@ public class RuntimeManager {
                 if (!isProotInstalled()) {
                     emitProgress(listener, "Downloading PRoot...");
                     downloadFile(PROOT_URL, prootBin);
+                    // Android W^X policy: executable files must not be writable.
+                    prootBin.setWritable(false, false);
+                    prootBin.setReadable(true, false);
                     prootBin.setExecutable(true, false);
                     emitProgress(listener, "PRoot ready.");
                 }
@@ -345,6 +348,9 @@ public class RuntimeManager {
                 }
                 int mode = (int) parseTarSize(header, 100, 8);
                 if ((mode & 0100) != 0) {
+                    // Android W^X policy: executable files must not be writable.
+                    outFile.setWritable(false, false);
+                    outFile.setReadable(true, false);
                     outFile.setExecutable(true, false);
                 }
             }

@@ -226,18 +226,29 @@ public class RuntimeManager {
 
     /**
      * Runs a command and streams output to the listener.
+     * On non-zero exit, throws an IOException that includes the captured output
+     * so the user can see why apk/proot/etc. failed (e.g. "Could not resolve host").
      */
     public void runInAlpine(String command, SetupListener listener) throws IOException, InterruptedException {
         Process process = runInAlpine(command);
+        StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 emitProgress(listener, line);
+                output.append(line).append('\n');
             }
         }
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IOException("Command exited with code " + exitCode + ": " + command);
+            String msg = "Command exited with code " + exitCode + ": " + command;
+            String captured = output.toString().trim();
+            if (!captured.isEmpty()) {
+                int max = 2000;
+                if (captured.length() > max) captured = "..." + captured.substring(captured.length() - max);
+                msg += "\n\n--- output ---\n" + captured;
+            }
+            throw new IOException(msg);
         }
     }
 
@@ -516,9 +527,15 @@ public class RuntimeManager {
             Log.e(TAG, "diag: prootBin=" + prootBin.getAbsolutePath()
                     + " exists=" + prootBin.exists() + " canExec=" + prootBin.canExecute());
             File parent = prootBin.getParentFile();
+            File prootTmp = getProotTmpDir();
+            File rootfsBin = new File(rootfsDir, "bin/busybox");
+            File rootfsSh = new File(rootfsDir, "bin/sh");
             ProcessBuilder pb = new ProcessBuilder("/system/bin/ls", "-ldZ",
                     prootBin.getAbsolutePath(),
-                    parent != null ? parent.getAbsolutePath() : "/");
+                    parent != null ? parent.getAbsolutePath() : "/",
+                    prootTmp.getAbsolutePath(),
+                    rootfsBin.getAbsolutePath(),
+                    rootfsSh.getAbsolutePath());
             pb.redirectErrorStream(true);
             try (BufferedReader r = new BufferedReader(
                     new InputStreamReader(pb.start().getInputStream()))) {

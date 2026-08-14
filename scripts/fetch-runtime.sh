@@ -73,13 +73,23 @@ fetch "$PROOT_DEB" "data/data/com.termux/files/usr/libexec/proot/loader" "$DEST_
 fetch "$EXEC_DEB" "data/data/com.termux/files/usr/lib/libtermux-exec-ld-preload.so" "$DEST_DIR/libtermux-exec.so"
 
 # proot runtime deps
-fetch "$TALLOC_DEB" "data/data/com.termux/files/usr/lib/libtalloc.so.2.4.3" "$DEST_DIR/libtalloc.so.2"
+# NOTE: libtalloc is fetched as libtalloc.so.2.4.3 but renamed to libtalloc.so
+# and re-SONAME'd. Reason: AGP's native-lib packaging only includes files
+# matching *.so from jniLibs/ -- libtalloc.so.2 ends in .2, not .so, so AGP
+# silently skips it and it never lands in nativeLibraryDir. Renaming it to
+# libtalloc.so, rewriting its SONAME, and rewriting libproot.so's NEEDED to
+# match makes both AGP and the Android dynamic linker happy.
+fetch "$TALLOC_DEB" "data/data/com.termux/files/usr/lib/libtalloc.so.2.4.3" "$DEST_DIR/libtalloc.so.x"
 fetch "$SHMEM_DEB"  "data/data/com.termux/files/usr/lib/libandroid-shmem.so" "$DEST_DIR/libandroid-shmem.so"
+mv "$DEST_DIR/libtalloc.so.x" "$DEST_DIR/libtalloc.so"
 
 # Rewrite libproot.so's RUNPATH so it looks for its NEEDED libs in the same
 # directory as itself ($ORIGIN) instead of /data/data/com.termux/files/usr/lib.
+# Also rewrite NEEDED libtalloc.so.2 -> libtalloc.so to match the renamed lib.
 if command -v patchelf >/dev/null 2>&1; then
     patchelf --set-rpath '$ORIGIN' "$DEST_DIR/libproot.so"
+    patchelf --replace-needed libtalloc.so.2 libtalloc.so "$DEST_DIR/libproot.so"
+    patchelf --set-soname  libtalloc.so "$DEST_DIR/libtalloc.so"
 else
     echo "WARN: patchelf not installed; libproot.so deps will not resolve at runtime." >&2
 fi

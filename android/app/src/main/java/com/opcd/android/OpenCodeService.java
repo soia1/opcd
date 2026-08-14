@@ -13,7 +13,6 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -101,25 +100,13 @@ public class OpenCodeService extends Service {
 
                 emitStatus("Starting OpenCode server...");
 
-                File projectsDir = new File(getFilesDir(), "projects");
-                projectsDir.mkdirs();
-
                 ProcessBuilder pb = new ProcessBuilder(
-                        runtimeManager.getProotBin().getAbsolutePath(),
-                        "-0",
-                        "-r", runtimeManager.getRootfsDir().getAbsolutePath(),
-                        "-b", "/dev",
-                        "-b", "/proc",
-                        "-b", "/sys",
-                        "-b", projectsDir.getAbsolutePath() + ":/root/projects",
-                        "-w", "/root",
-                        "/bin/sh",
-                        "-c",
-                        "mkdir -p /root/projects && opencode serve --hostname 127.0.0.1 --port 4096"
+                        runtimeManager.buildProotBaseCommand()
                 );
-                pb.redirectErrorStream(true);
-                pb.environment().put("HOME", "/root");
-                pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:/sbin");
+                pb.command().add("/bin/sh");
+                pb.command().add("-c");
+                pb.command().add("mkdir -p /root/projects && opencode serve --hostname 127.0.0.1 --port 4096");
+                runtimeManager.configureProotEnv(pb);
 
                 prootProcess = pb.start();
 

@@ -2,7 +2,6 @@ package com.opcd.android.terminal;
 
 import android.util.Log;
 import com.opcd.android.RuntimeManager;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -61,23 +60,11 @@ public class TerminalSession {
             }
             this.listener = listener;
             try {
-                File projectsDir = new File(runtimeManager.getBaseDir(), "projects");
-                projectsDir.mkdirs();
-
                 ProcessBuilder pb = new ProcessBuilder(
-                        runtimeManager.getProotBin().getAbsolutePath(),
-                        "-0",
-                        "-r", runtimeManager.getRootfsDir().getAbsolutePath(),
-                        "-b", "/dev",
-                        "-b", "/proc",
-                        "-b", "/sys",
-                        "-b", projectsDir.getAbsolutePath() + ":/root/projects",
-                        "-w", "/root",
-                        "/bin/sh"
+                        runtimeManager.buildProotBaseCommand()
                 );
-                pb.redirectErrorStream(true);
-                pb.environment().put("HOME", "/root");
-                pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:/sbin");
+                pb.command().add("/bin/sh");
+                runtimeManager.configureProotEnv(pb);
                 // Plain TextView rendering: no ANSI escape support, so use a
                 // dumb terminal to keep programs from emitting escape codes.
                 pb.environment().put("TERM", "dumb");

@@ -13,6 +13,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.GZIPInputStream;
@@ -25,11 +30,10 @@ public class RuntimeManager {
 
     private static final String TAG = "RuntimeManager";
 
-    // URLs and versions
-    private static final String PROOT_VERSION = "5.3.0";
-    private static final String PROOT_URL =
-            "https://github.com/proot-me/proot/releases/download/v" + PROOT_VERSION +
-                    "/proot-v" + PROOT_VERSION + "-aarch64-static";
+    // PRoot ships inside the APK as a native library (see scripts/fetch-proot.sh
+    // and the jniLibs/arm64-v8a/libproot.so fetched in CI). Android extracts it
+    // to nativeLibraryDir, the only app-owned storage SELinux allows execve()
+    // from on Android 10+ (app_data_file neverallow on execute_no_trans).
 
     private static final String ALPINE_BRANCH = "v3.19";
     private static final String ALPINE_VERSION = "3.19.9";
@@ -50,7 +54,6 @@ public class RuntimeManager {
     private final File baseDir;
     private final File runtimeDir;
     private final File rootfsDir;
-    private final File binDir;
     private final File prootBin;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -65,14 +68,54 @@ public class RuntimeManager {
         this.baseDir = context.getFilesDir();
         this.runtimeDir = new File(baseDir, "runtime");
         this.rootfsDir = new File(runtimeDir, "alpine-rootfs");
-        this.binDir = new File(runtimeDir, "bin");
-        this.prootBin = new File(binDir, "proot");
+        // Execute PRoot from the APK's native library directory (apk_data_file),
+        // not from app private storage (app_data_file) which Android 10+ forbids.
+        this.prootBin = new File(context.getApplicationInfo().nativeLibraryDir, "libproot.so");
     }
 
     public File getBaseDir() { return baseDir; }
     public File getRuntimeDir() { return runtimeDir; }
     public File getRootfsDir() { return rootfsDir; }
     public File getProotBin() { return prootBin; }
+
+    /** Directory PRoot uses for its host-side temporary files (the loader). */
+    public File getProotTmpDir() {
+        return new File(runtimeDir, "proot-tmp");
+    }
+
+    /**
+     * Builds the common PRoot argument list up to (but not including) the guest
+     * program. Callers append their own guest argv (e.g. /bin/sh -c ...).
+     */
+    public List<String> buildProotBaseCommand() {
+        File projectsDir = new File(baseDir, "projects");
+        projectsDir.mkdirs();
+        getProotTmpDir().mkdirs();
+
+        List<String> cmd = new ArrayList<>();
+        cmd.add(prootBin.getAbsolutePath());
+        cmd.add("-0");
+        cmd.add("-r"); cmd.add(rootfsDir.getAbsolutePath());
+        cmd.add("-b"); cmd.add("/dev");
+        cmd.add("-b"); cmd.add("/proc");
+        cmd.add("-b"); cmd.add("/sys");
+        // Android 10+: the dynamic linker /system/bin/linker64 is a symlink to
+        // /apex/com.android.runtime/bin/linker64, so /apex must be visible.
+        if (new File("/apex").exists()) {
+            cmd.add("-b"); cmd.add("/apex");
+        }
+        cmd.add("-b"); cmd.add(projectsDir.getAbsolutePath() + ":/root/projects");
+        cmd.add("-w"); cmd.add("/root");
+        return cmd;
+    }
+
+    /** Applies the shared environment variables needed by PRoot + the guest. */
+    public void configureProotEnv(ProcessBuilder pb) {
+        pb.redirectErrorStream(true);
+        pb.environment().put("HOME", "/root");
+        pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:/sbin");
+        pb.environment().put("PROOT_TMPDIR", getProotTmpDir().getAbsolutePath());
+    }
 
     /**
      * Returns true if PRoot binary exists and is executable.
@@ -114,14 +157,15 @@ public class RuntimeManager {
                 mkdirs();
 
                 if (!isProotInstalled()) {
-                    emitProgress(listener, "Downloading PRoot...");
-                    downloadFile(PROOT_URL, prootBin);
-                    // Android W^X policy: executable files must not be writable.
-                    prootBin.setWritable(false, false);
-                    prootBin.setReadable(true, false);
-                    prootBin.setExecutable(true, false);
-                    emitProgress(listener, "PRoot ready.");
+                    // PRoot is shipped inside the APK as a native library and must
+                    // already exist, executable, in nativeLibraryDir. It cannot be
+                    // downloaded at runtime because Android 10+ SELinux forbids
+                    // executing any file from app private storage.
+                    throw new IOException("PRoot native library missing: "
+                            + prootBin.getAbsolutePath()
+                            + ". Reinstall the app (APK may be wrong ABI).");
                 }
+                emitProgress(listener, "PRoot ready (" + prootBin.getAbsolutePath() + ").");
 
                 if (!isAlpineInstalled()) {
                     emitProgress(listener, "Downloading Alpine Linux...");
@@ -156,6 +200,7 @@ public class RuntimeManager {
 
             } catch (Exception e) {
                 Log.e(TAG, "Setup failed", e);
+                logDiagnostics();
                 emitError(listener, "Setup failed: " + e.getMessage());
             }
         });
@@ -169,25 +214,13 @@ public class RuntimeManager {
             throw new IOException("Linux runtime is not installed");
         }
 
-        File projectsDir = new File(baseDir, "projects");
-        projectsDir.mkdirs();
+        List<String> cmd = buildProotBaseCommand();
+        cmd.add("/bin/sh");
+        cmd.add("-c");
+        cmd.add(command);
 
-        ProcessBuilder pb = new ProcessBuilder(
-                prootBin.getAbsolutePath(),
-                "-0",
-                "-r", rootfsDir.getAbsolutePath(),
-                "-b", "/dev",
-                "-b", "/proc",
-                "-b", "/sys",
-                "-b", projectsDir.getAbsolutePath() + ":/root/projects",
-                "-w", "/root",
-                "/bin/sh",
-                "-c",
-                command
-        );
-        pb.redirectErrorStream(true);
-        pb.environment().put("HOME", "/root");
-        pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:/sbin");
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        configureProotEnv(pb);
         return pb.start();
     }
 
@@ -211,7 +244,7 @@ public class RuntimeManager {
     private void mkdirs() {
         runtimeDir.mkdirs();
         rootfsDir.mkdirs();
-        binDir.mkdirs();
+        new File(runtimeDir, "proot-tmp").mkdirs();
     }
 
     private void configureAlpine() throws IOException {
@@ -298,10 +331,31 @@ public class RuntimeManager {
         }
     }
 
+    /** Reads exactly buf.length bytes; throws EOFException if the stream ends early. */
+    private static void readFully(InputStream in, byte[] buf) throws IOException {
+        int off = 0;
+        while (off < buf.length) {
+            int r = in.read(buf, off, buf.length - off);
+            if (r == -1) throw new IOException("Unexpected EOF in tar stream");
+            off += r;
+        }
+    }
+
+    /** Reads up to 512 bytes into buf; returns 512 on success, -1 at clean EOF, or a partial count. */
+    private static int readBlockOrEof(InputStream in, byte[] buf) throws IOException {
+        int off = 0;
+        while (off < 512) {
+            int r = in.read(buf, off, 512 - off);
+            if (r == -1) return off == 0 ? -1 : off;
+            off += r;
+        }
+        return 512;
+    }
+
     private void extractTar(InputStream in, File destination) throws IOException {
         // Minimal tar extractor: supports regular files, directories, and symlinks.
         byte[] header = new byte[512];
-        while (in.read(header) == 512) {
+        while (readBlockOrEof(in, header) == 512) {
             if (isNullBlock(header)) {
                 continue;
             }
@@ -314,25 +368,47 @@ public class RuntimeManager {
             // Handle long names via GNU ././@LongLink.
             if (name.equals("././@LongLink")) {
                 byte[] longNameBytes = new byte[(int) size];
-                in.read(longNameBytes);
+                readFully(in, longNameBytes);
                 name = new String(longNameBytes, 0, indexOfNull(longNameBytes));
                 long padding = (512 - (size % 512)) % 512;
                 if (padding > 0) in.skip(padding);
                 // Read the actual header next.
-                in.read(header);
+                if (readBlockOrEof(in, header) != 512) break;
                 size = parseTarSize(header, 124, 12);
                 typeFlag = header[156] & 0xFF;
                 linkName = parseLinkName(header);
+            }
+
+            // Guard against path traversal (../) outside the rootfs.
+            if (name.startsWith("/") || name.contains("..")) {
+                // Skip absolute or escaping entries safely.
+                long pad = (512 - (size % 512)) % 512;
+                if (pad > 0) in.skip(pad);
+                continue;
             }
 
             File outFile = new File(destination, name);
             if (typeFlag == '5') {
                 outFile.mkdirs();
             } else if (typeFlag == '2') {
-                // Symbolic link: create a small file as placeholder.
-                // In a real implementation, use NDK or Runtime.exec("ln -s").
+                // Symbolic link: create a real symlink (needed for busybox applets
+                // like /bin/sh -> /bin/busybox). Anchoring absolute targets inside
+                // the rootfs keeps extraction within the app's tree.
                 outFile.getParentFile().mkdirs();
-                writeText(outFile, "SYMLINK:" + linkName);
+                if (outFile.exists()) outFile.delete();
+                Path link = outFile.toPath();
+                Path target;
+                if (linkName.startsWith("/")) {
+                    Path resolved = destination.toPath().resolve(linkName.substring(1));
+                    target = link.getParent().relativize(resolved);
+                } else {
+                    target = Paths.get(linkName);
+                }
+                try {
+                    Files.createSymbolicLink(link, target);
+                } catch (IOException e) {
+                    writeText(outFile, linkName);
+                }
             } else if (typeFlag == '0' || typeFlag == '\0') {
                 outFile.getParentFile().mkdirs();
                 try (OutputStream out = new FileOutputStream(outFile)) {
@@ -348,7 +424,7 @@ public class RuntimeManager {
                 }
                 int mode = (int) parseTarSize(header, 100, 8);
                 if ((mode & 0100) != 0) {
-                    // Android W^X policy: executable files must not be writable.
+                    // Android W^X: executable files kept read-only + executable.
                     outFile.setWritable(false, false);
                     outFile.setReadable(true, false);
                     outFile.setExecutable(true, false);
@@ -430,6 +506,27 @@ public class RuntimeManager {
     private void emitComplete(SetupListener listener) {
         if (listener != null) {
             context.getMainExecutor().execute(() -> listener.onComplete());
+        }
+    }
+
+    /** Logs PRoot path + SELinux context to logcat to aid debugging exec failures. */
+    private void logDiagnostics() {
+        try {
+            Log.e(TAG, "diag: nativeLibraryDir=" + context.getApplicationInfo().nativeLibraryDir);
+            Log.e(TAG, "diag: prootBin=" + prootBin.getAbsolutePath()
+                    + " exists=" + prootBin.exists() + " canExec=" + prootBin.canExecute());
+            File parent = prootBin.getParentFile();
+            ProcessBuilder pb = new ProcessBuilder("/system/bin/ls", "-ldZ",
+                    prootBin.getAbsolutePath(),
+                    parent != null ? parent.getAbsolutePath() : "/");
+            pb.redirectErrorStream(true);
+            try (BufferedReader r = new BufferedReader(
+                    new InputStreamReader(pb.start().getInputStream()))) {
+                String line;
+                while ((line = r.readLine()) != null) Log.e(TAG, "diag ls -ldZ: " + line);
+            }
+        } catch (Exception ignored) {
+            // Best-effort diagnostics.
         }
     }
 

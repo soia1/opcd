@@ -25,6 +25,16 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
+    packaging {
+        jniLibs {
+            // Extract native libraries (libproot.so) to /data/app/<pkg>/lib/<abi>/
+            // as real, executable files. Required so PRoot can be execve()'d from
+            // the native library directory (the only app-owned storage Android 10+
+            // SELinux allows execution from).
+            useLegacyPackaging true
+        }
+    }
 }
 
 dependencies {

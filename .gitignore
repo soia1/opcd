@@ -19,6 +19,9 @@ android/.idea/
 *.jar
 !android/gradle/wrapper/gradle-wrapper.jar
 
+# Fetched native libraries (PRoot is downloaded at build time, see scripts/fetch-proot.sh)
+android/app/src/main/jniLibs/
+
 # IDE
 .idea/
 .vscode/

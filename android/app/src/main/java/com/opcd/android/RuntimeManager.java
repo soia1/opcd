@@ -114,7 +114,16 @@ public class RuntimeManager {
         pb.redirectErrorStream(true);
         pb.environment().put("HOME", "/root");
         pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:/sbin");
-        pb.environment().put("PROOT_TMPDIR", getProotTmpDir().getAbsolutePath());
+        // PRoot 5.3.0 reads PROOT_TMP_DIR (the name it prints in its error
+        // message). Older builds recognize PROOT_TMPDIR. Set both so the
+        // writable app-private temp dir is used; otherwise proot falls back to
+        // host /tmp, which apps cannot write to -> "can't create temporary
+        // directory: Permission denied" -> the whole glue-rootfs path lookup
+        // collapses ("/bin/sh: No such file or directory").
+        File tmp = getProotTmpDir();
+        if (!tmp.isDirectory()) tmp.mkdirs();
+        pb.environment().put("PROOT_TMP_DIR", tmp.getAbsolutePath());
+        pb.environment().put("PROOT_TMPDIR", tmp.getAbsolutePath());
     }
 
     /**
